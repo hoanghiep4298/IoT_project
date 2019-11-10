@@ -22,21 +22,25 @@ extern String RID;
 extern String Rname;
 extern String Rcontent;
 
-int led = 16;
+int led = 13;
 unsigned long previousMillis = 0;
-long interval = 5000;
+long interval = 3000;
+long pumpTiming = 7000;
 unsigned long lastreply = 0;
 unsigned long lastsend = 0;
+unsigned long pumpStart = 0;
 String JSON;
 // Trang thai on/off cua may bom
 String stateOfPump = "off";
 // Trang thai on/off cua che do bom tu dong
 String autoModeState = "on";
+bool lockState = false;
+unsigned censorValue;
 
 JsonObject& root = jsonBuffer.createObject();
 void setup() {
     pinMode(led, OUTPUT);
-  
+    digitalWrite(led, LOW);
 //  root["time"] = 1351824120;level
 //  JsonArray& data = root.createNestedArray("data");
 //  data.add(double_with_n_digits(48.756080, 6));
@@ -67,7 +71,6 @@ void setup() {
     return;
   }
 }
-
 void loop() {
   if(!client.connected()){
     client.disconnect();
@@ -79,28 +82,59 @@ void loop() {
     Serial.println("Ket noi lai ...");
     delay(5000);
   }
+
+  //Neu dang bom ma khong nhan turn off thi cu tiep tuc bom 7s
   
+  //censorValue = analogRead(A0);
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis > interval)
   {
+    //Handle
+    if(stateOfPump == "on"){
+      if(lockState == false) {
+        pumpStart = millis();
+        lockState = true;
+        //turn pump on
+        digitalWrite(led, HIGH);
+      }
+      // Turn off Pump after 7s
+      if(currentMillis - pumpStart > pumpTiming){
+        stateOfPump = "off";
+      }
+      
+    } else {
+      
+      if(lockState == true){
+        lockState = false;
+        //turn pump off
+        digitalWrite(led, LOW);
+      }
+    }
+    //==============================
+    //nếu bật chế độ tự động thì khi hết nước sẽ tự bơm.
+    if(autoModeState == "on"){
+      if(stateOfPump == "off"){
+        censorValue = analogRead(A0);
+        Serial.println(censorValue);
+        if(censorValue > 300){
+          stateOfPump = "on";
+        }
+      }
+    }
+    // update state
     previousMillis = currentMillis;
-
     JSON = "";
     root["stateOfPump"] = stateOfPump;
     root["autoModeState"] = autoModeState;
     root.printTo(JSON);
   
-//    Serial.println(JSON);
+    Serial.println(JSON);
     //client.send("updateStatus", "status", String(statusOfPump));
     client.sendJSON("updateStatus", JSON);
 
   }
   //=============================
-//  digitalWrite(led, HIGH);
-//  delay(2000);
-//  digitalWrite(led, LOW);
-//  delay(2000);
-//  
+
   if (client.monitor())
   {
     lastreply = millis(); 
